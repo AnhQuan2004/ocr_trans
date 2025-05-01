@@ -10,7 +10,7 @@ import cv2
 from PIL import Image
 import editdistance
 from tqdm import tqdm
-from config import ALPHABET, CHANNELS, WIDTH, HEIGHT, DEVICE, BATCH_SIZE
+from config import ALPHABET, CHANNELS, WIDTH, HEIGHT, DEVICE, BATCH_SIZE, LENGTH
 from pathlib import Path
 
 class PositionalEncoding(torch.nn.Module):
@@ -70,12 +70,18 @@ def process_data(image_dir, labels_dir, ignore=[]):
 
         raw = open(labels_dir, 'r', encoding='utf-8').read()
         lines = raw.split('\n')
+        skipped = 0
         for line in lines:
             try:
                 if not line.strip():  # Skip empty lines
                     continue
                     
                 filename, label = line.split('\t')
+                # Skip if label is too long
+                if len(label) >= LENGTH - 2:  # -2 for SOS and EOS tokens
+                    skipped += 1
+                    continue
+                    
                 flag = False
                 for item in ignore:
                     if item in label:
@@ -97,7 +103,8 @@ def process_data(image_dir, labels_dir, ignore=[]):
 
         if not img2label:
             raise ValueError("No valid image-label pairs found. Please check your data directory and labels file.")
-
+            
+        print(f"Skipped {skipped} samples that were longer than {LENGTH-2} characters")
         all_labels = sorted(list(set(list(img2label.values()))))
         chars.sort()
         chars = ['PAD', 'SOS'] + chars + ['EOS']

@@ -53,7 +53,7 @@ try:
         raise ValueError("No valid image-label pairs found in training data")
         
     img_names, labels = list(img2label.keys()), list(img2label.values())
-    print(f"Found {len(img_names)} training images")
+    print(f"Loading {len(img_names)} training images")
     
     X_train = generate_data(img_names)
     y_train = labels
@@ -66,7 +66,7 @@ try:
     print(f"Loading test dataset from {PATH_TEST_DIR} ...")
     img2label, _, all_words = process_data(PATH_TEST_DIR, PATH_TEST_LABELS) 
     img_names, labels = list(img2label.keys()), list(img2label.values())
-    print(f"Found {len(img_names)} test images")
+    print(f"Loading {len(img_names)} test images")
     
     X_test = generate_data(img_names)
     y_test = labels
