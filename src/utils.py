@@ -111,17 +111,9 @@ def process_data(image_dir, labels_dir, ignore=[]):
 
 # TRANSLATE INDICIES TO TEXT
 def indicies_to_text(indexes, idx2char):
-    """Convert model output indices to text with better handling of special tokens"""
-    text = []
-    for idx in indexes:
-        char = idx2char[idx]
-        # Stop at EOS token
-        if char == 'EOS':
-            break
-        # Skip special tokens
-        if char not in ['PAD', 'SOS', 'EOS']:
-            text.append(char)
-    return "".join(text)
+    text = "".join([idx2char[i] for i in indexes])
+    text = text.replace('EOS', '').replace('PAD', '').replace('SOS', '')
+    return text
 
 
 # COMPUTE CHARACTER ERROR RATE
@@ -157,7 +149,6 @@ def char_error_rate(p_seq1, p_seq2):
 # RESIZE AND NORMALIZE IMAGE
 def process_image(img):
     """
-    Process image for OCR
     params:
     ---
     img : np.array
@@ -166,28 +157,22 @@ def process_image(img):
     ---
     img : np.array
     """
-    # Convert to float32 for better precision
-    img = img.astype('float32')
-    
-    # Calculate new dimensions while maintaining aspect ratio
     w, h, _ = img.shape
     new_w = HEIGHT
     new_h = int(h * (new_w / w))
-    
-    # Resize with better interpolation
-    img = cv2.resize(img, (new_h, new_w), interpolation=cv2.INTER_LANCZOS4)
-    
-    # Add padding if needed
+    img = cv2.resize(img, (new_h, new_w))
     w, h, _ = img.shape
+
+    img = img.astype('float32')
+
     new_h = WIDTH
     if h < new_h:
-        # Use white padding (255)
-        add_zeros = np.full((w, new_h - h, 3), 255, dtype=np.float32)
+        add_zeros = np.full((w, new_h - h, 3), 255)
         img = np.concatenate((img, add_zeros), axis=1)
-    elif h > new_h:
-        # Resize if too large
-        img = cv2.resize(img, (new_h, new_w), interpolation=cv2.INTER_LANCZOS4)
-    
+
+    if h > new_h:
+        img = cv2.resize(img, (new_h, new_w))
+
     return img
 
 
@@ -240,23 +225,38 @@ def count_parameters(model):
 
 
 def evaluate(model, criterion, loader, case=True, punct=True):
-    """Evaluate model with detailed metrics"""
+    """
+    Evaluate model performance
+    params
+    ---
+    model : nn.Module
+    criterion : nn.Object
+    loader : torch.utils.data.DataLoader
+    case : bool
+        whether to consider case sensitivity
+    punct : bool
+        whether to consider punctuation
+
+    returns
+    ---
+    metrics : dict
+        evaluation metrics
+    result : dict
+        detailed results for analysis
+    """
     model.eval()
     metrics = {'loss': 0, 'wer': 0, 'cer': 0}
-    result = {'true': [], 'predicted': [], 'cer': [], 'correct_chars': 0, 'total_chars': 0}
+    result = {'true': [], 'predicted': [], 'cer': []}
     
     with torch.no_grad():
         for batch_idx, (src, trg) in enumerate(loader):
             src, trg = src.to(DEVICE), trg.to(DEVICE)
-            
-            # Get model predictions
             logits = model(src, trg[:-1, :])
             loss = criterion(logits.view(-1, logits.shape[-1]), torch.reshape(trg[1:, :], (-1,)))
             out_indexes = model.predict(src)
             
-            # Convert to text
-            true_phrases = [indicies_to_text(trg.T[i][1:], ALPHABET) for i in range(len(trg.T))]
-            pred_phrases = [indicies_to_text(out_indexes[i], ALPHABET) for i in range(len(out_indexes))]
+            true_phrases = [indicies_to_text(trg.T[i][1:], ALPHABET) for i in range(BATCH_SIZE)]
+            pred_phrases = [indicies_to_text(out_indexes[i], ALPHABET) for i in range(BATCH_SIZE)]
             
             if not case:
                 true_phrases = [phrase.lower() for phrase in true_phrases]
@@ -265,59 +265,43 @@ def evaluate(model, criterion, loader, case=True, punct=True):
                 true_phrases = [phrase.translate(str.maketrans('', '', string.punctuation)) for phrase in true_phrases]
                 pred_phrases = [phrase.translate(str.maketrans('', '', string.punctuation)) for phrase in pred_phrases]
             
-            # Calculate metrics
+            # Calculate metrics for this batch
             batch_cer = 0
             batch_wer = 0
-            for i in range(len(true_phrases)):
+            for i in range(BATCH_SIZE):
+                # Skip empty predictions/targets
                 if not true_phrases[i] or not pred_phrases[i]:
                     continue
-                
-                # Character level metrics
+                    
                 current_cer = char_error_rate(true_phrases[i], pred_phrases[i])
                 batch_cer += current_cer
-                
-                # Count correct characters
-                for t, p in zip(true_phrases[i], pred_phrases[i]):
-                    if t == p:
-                        result['correct_chars'] += 1
-                result['total_chars'] += len(true_phrases[i])
-                
-                # Word level metrics
                 batch_wer += int(true_phrases[i] != pred_phrases[i])
                 
-                # Debug output
-                if batch_idx < 2 and i < 2:
+                # Debug output for first few batches
+                if batch_idx < 2 and i < 2:  # Show first 2 samples of first 2 batches
                     print(f"\nSample {batch_idx}_{i}:")
                     print(f"True:      '{true_phrases[i]}'")
                     print(f"Predicted: '{pred_phrases[i]}'")
                     print(f"CER: {current_cer:.4f}")
             
-            # Update metrics
             metrics['loss'] += loss.item()
-            metrics['cer'] += batch_cer / len(true_phrases)
-            metrics['wer'] += batch_wer / len(true_phrases)
+            metrics['cer'] += batch_cer / BATCH_SIZE
+            metrics['wer'] += batch_wer / BATCH_SIZE
             
-            # Store results
+            # Store detailed results
             result['true'].extend(true_phrases)
             result['predicted'].extend(pred_phrases)
-            result['cer'].extend([char_error_rate(true_phrases[i], pred_phrases[i]) 
-                                for i in range(len(true_phrases))])
-    
-    # Average metrics
+            result['cer'].extend([char_error_rate(true_phrases[i], pred_phrases[i]) for i in range(BATCH_SIZE)])
+
+    # Average metrics over all batches
     for key in metrics.keys():
         metrics[key] /= len(loader)
-    
-    # Calculate character accuracy
-    char_acc = result['correct_chars'] / max(result['total_chars'], 1) * 100
-    
-    # Print detailed statistics
+        
+    # Print some statistics
     print("\nEvaluation Statistics:")
     print(f"Average CER: {metrics['cer']:.4f}")
     print(f"Average WER: {metrics['wer']:.4f}")
     print(f"Average Loss: {metrics['loss']:.4f}")
-    print(f"Character Accuracy: {char_acc:.2f}%")
-    print(f"Total Characters: {result['total_chars']}")
-    print(f"Correct Characters: {result['correct_chars']}")
     
     return metrics, result
 
