@@ -11,6 +11,7 @@ from PIL import Image
 import editdistance
 from tqdm import tqdm
 from config import ALPHABET, CHANNELS, WIDTH, HEIGHT, DEVICE, BATCH_SIZE
+from pathlib import Path
 
 class PositionalEncoding(torch.nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
@@ -37,15 +38,14 @@ def process_data(image_dir, labels_dir, ignore=[]):
     """
     params
     ---
-    image_dir : str
+    image_dir : str or Path
       path to directory with images
 
-    labels_dir : str
+    labels_dir : str or Path
       path to tsv file with labels
 
     returns
     ---
-
     img2label : dict
       keys are names of images and values are correspondent labels
 
@@ -54,33 +54,59 @@ def process_data(image_dir, labels_dir, ignore=[]):
 
     all_labels : list
     """
-
     chars = []
     img2label = dict()
 
-    raw = open(labels_dir, 'r', encoding='utf-8').read()
-    lines = raw.split('\n')
-    for line in lines:
-        try:
-            filename, label = line.split('\t')
-            flag = False
-            for item in ignore:
-                if item in label:
-                    flag = True
-            if flag == False:
-                img2label[image_dir / filename] = label
-                for char in label:
-                    if char not in chars:
-                        chars.append(char)
-        except:
-            print('Bad line:', line)
-            pass
+    try:
+        # Convert paths to Path objects if they aren't already
+        image_dir = Path(image_dir)
+        labels_dir = Path(labels_dir)
+        
+        if not labels_dir.exists():
+            raise FileNotFoundError(f"Labels file not found at: {labels_dir}")
+            
+        if not image_dir.exists():
+            raise FileNotFoundError(f"Image directory not found at: {image_dir}")
 
-    all_labels = sorted(list(set(list(img2label.values()))))
-    chars.sort()
-    chars = ['PAD', 'SOS'] + chars + ['EOS']
+        raw = open(labels_dir, 'r', encoding='utf-8').read()
+        lines = raw.split('\n')
+        for line in lines:
+            try:
+                if not line.strip():  # Skip empty lines
+                    continue
+                    
+                filename, label = line.split('\t')
+                flag = False
+                for item in ignore:
+                    if item in label:
+                        flag = True
+                if flag == False:
+                    # Use Path to join paths correctly for the OS
+                    img_path = image_dir / filename
+                    if img_path.exists():  # Only add if image exists
+                        img2label[img_path] = label
+                        for char in label:
+                            if char not in chars:
+                                chars.append(char)
+                    else:
+                        print(f'Warning: Image not found: {img_path}')
+            except Exception as e:
+                print(f'Bad line: {line}')
+                print(f'Error: {str(e)}')
+                continue
 
-    return img2label, chars, all_labels
+        if not img2label:
+            raise ValueError("No valid image-label pairs found. Please check your data directory and labels file.")
+
+        all_labels = sorted(list(set(list(img2label.values()))))
+        chars.sort()
+        chars = ['PAD', 'SOS'] + chars + ['EOS']
+
+        return img2label, chars, all_labels
+        
+    except Exception as e:
+        print(f"Error in process_data: {str(e)}")
+        raise
 
 
 # TRANSLATE INDICIES TO TEXT
@@ -162,13 +188,32 @@ def generate_data(img_paths):
     """
     data_images = []
     for path in tqdm(img_paths):
-        img = np.asarray(Image.open(path).convert('RGB'))
         try:
+            # Convert path to string to handle both Windows and Unix paths
+            path_str = str(path)
+            if not os.path.exists(path_str):
+                print(f"Warning: Image not found at path: {path_str}")
+                continue
+                
+            # Try different methods to load the image
+            try:
+                img = cv2.imread(path_str)
+                if img is not None:
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                else:
+                    img = np.asarray(Image.open(path_str).convert('RGB'))
+            except:
+                img = np.asarray(Image.open(path_str).convert('RGB'))
+            
             img = process_image(img)
             data_images.append(img.astype('uint8'))
-        except:
-            print(path)
-            img = process_image(img)
+        except Exception as e:
+            print(f"Error processing image {path_str}: {str(e)}")
+            continue
+            
+    if len(data_images) == 0:
+        raise ValueError("No images could be loaded successfully. Please check your image paths and formats.")
+        
     return data_images
 
 
