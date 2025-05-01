@@ -1,0 +1,8 @@
+torch>=2.0.0
+torchvision>=0.15.0
+opencv-python
+Pillow>=9.0.0
+Augmentor
+editdistance
+numpy
+tqdm
