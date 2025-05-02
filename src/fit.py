@@ -2,7 +2,7 @@ from time import time
 import numpy as np
 import torch
 from const import TRAIN_LOG
-from config import DEVICE
+from config import DEVICE, CHECKPOINT_FREQ
 from utils import indicies_to_text, char_error_rate, evaluate, log_metrics
 from tqdm import tqdm
 
@@ -53,26 +53,32 @@ def fit(model, optimizer, scheduler, criterion, train_loader, val_loader, start_
         train_loss = train(model, optimizer, criterion, train_loader)
         end_time = time()
         
-        # Thêm progress bar cho validation
-        print("\nValidating...")
-        epoch_metrics, _ = evaluate(model, criterion, val_loader)
-        epoch_metrics['train_loss'] = train_loss
-        epoch_metrics['epoch'] = epoch
-        epoch_metrics['time'] = end_time - start_time
-        epoch_metrics['lr'] = optimizer.param_groups[0]["lr"]
-        metrics.append(epoch_metrics)
-        
-        # Cập nhật thông tin trên progress bar
-        epoch_pbar.set_postfix({
-            'Train Loss': f'{train_loss:.4f}',
-            'Val Loss': f'{epoch_metrics["loss"]:.4f}',
-            'CER': f'{epoch_metrics["cer"]:.4f}',
-            'WER': f'{epoch_metrics["wer"]:.4f}',
-            'LR': f'{epoch_metrics["lr"]:.2e}'
-        })
-        
-        log_metrics(epoch_metrics, TRAIN_LOG)
-        if scheduler != None:
-            scheduler.step(epoch_metrics['train_loss'])
+        # Chỉ validate sau mỗi CHECKPOINT_FREQ epochs
+        if (epoch + 1) % CHECKPOINT_FREQ == 0:
+            print("\nValidating...")
+            epoch_metrics, _ = evaluate(model, criterion, val_loader)
+            epoch_metrics['train_loss'] = train_loss
+            epoch_metrics['epoch'] = epoch + 1
+            epoch_metrics['time'] = end_time - start_time
+            epoch_metrics['lr'] = optimizer.param_groups[0]["lr"]
+            metrics.append(epoch_metrics)
+            
+            # Cập nhật thông tin trên progress bar
+            epoch_pbar.set_postfix({
+                'Train Loss': f'{train_loss:.4f}',
+                'Val Loss': f'{epoch_metrics["loss"]:.4f}',
+                'CER': f'{epoch_metrics["cer"]:.4f}',
+                'WER': f'{epoch_metrics["wer"]:.4f}',
+                'LR': f'{epoch_metrics["lr"]:.2e}'
+            })
+            
+            log_metrics(epoch_metrics, TRAIN_LOG)
+            if scheduler is not None:
+                scheduler.step(epoch_metrics['train_loss'])
+        else:
+            # Nếu không validate, chỉ hiển thị train loss
+            epoch_pbar.set_postfix({
+                'Train Loss': f'{train_loss:.4f}'
+            })
             
     return metrics

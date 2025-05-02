@@ -70,17 +70,21 @@ def process_data(image_dir, labels_dir, ignore=[]):
 
         raw = open(labels_dir, 'r', encoding='utf-8').read()
         lines = raw.split('\n')
-        skipped = 0
+        very_long_texts = 0
+        max_text_len = 0
+        
         for line in lines:
             try:
                 if not line.strip():  # Skip empty lines
                     continue
                     
                 filename, label = line.split('\t')
-                # Skip if label is too long
-                if len(label) >= LENGTH - 2:  # -2 for SOS and EOS tokens
-                    skipped += 1
-                    continue
+                
+                # Theo dõi độ dài tối đa của văn bản để thông báo
+                text_len = len(label)
+                max_text_len = max(max_text_len, text_len)
+                if text_len > 512:
+                    very_long_texts += 1
                     
                 flag = False
                 for item in ignore:
@@ -101,10 +105,14 @@ def process_data(image_dir, labels_dir, ignore=[]):
                 print(f'Error: {str(e)}')
                 continue
 
+        print(f'Dataset statistics:')
+        print(f'- Total samples: {len(img2label)}')
+        print(f'- Maximum text length: {max_text_len} characters')
+        print(f'- Very long texts (>512 chars): {very_long_texts}')
+
         if not img2label:
             raise ValueError("No valid image-label pairs found. Please check your data directory and labels file.")
-            
-        print(f"Skipped {skipped} samples that were longer than {LENGTH-2} characters")
+
         all_labels = sorted(list(set(list(img2label.values()))))
         chars.sort()
         chars = ['PAD', 'SOS'] + chars + ['EOS']
@@ -256,7 +264,9 @@ def evaluate(model, criterion, loader, case=True, punct=True):
     result = {'true': [], 'predicted': [], 'cer': []}
     
     with torch.no_grad():
-        for batch_idx, (src, trg) in enumerate(loader):
+        # Thêm progress bar cho validation
+        val_pbar = tqdm(loader, desc='Validating', leave=False)
+        for batch_idx, (src, trg) in enumerate(val_pbar):
             src, trg = src.to(DEVICE), trg.to(DEVICE)
             logits = model(src, trg[:-1, :])
             loss = criterion(logits.view(-1, logits.shape[-1]), torch.reshape(trg[1:, :], (-1,)))
@@ -299,6 +309,13 @@ def evaluate(model, criterion, loader, case=True, punct=True):
             result['true'].extend(true_phrases)
             result['predicted'].extend(pred_phrases)
             result['cer'].extend([char_error_rate(true_phrases[i], pred_phrases[i]) for i in range(BATCH_SIZE)])
+
+            # Cập nhật progress bar với metrics hiện tại
+            val_pbar.set_postfix({
+                'Loss': f'{loss.item():.4f}',
+                'CER': f'{batch_cer/BATCH_SIZE:.4f}',
+                'WER': f'{batch_wer/BATCH_SIZE:.4f}'
+            })
 
     # Average metrics over all batches
     for key in metrics.keys():

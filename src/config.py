@@ -10,7 +10,7 @@ HIDDEN = 256
 ENC_LAYERS = 3
 DEC_LAYERS = 3
 N_HEADS = 8
-LENGTH = 42
+LENGTH = 512  # Increased to handle very long texts like invoices
 
 # Updated alphabet to support both Vietnamese and English
 ALPHABET = ['PAD', 'SOS'] + list(' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~'
@@ -19,10 +19,10 @@ ALPHABET = ['PAD', 'SOS'] + list(' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKL
             
 ### TRAINING ###
 BATCH_SIZE = 32
-DROPOUT = 0.2
-N_EPOCHS = 100  # Increased number of epochs
-CHECKPOINT_FREQ = 1
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # Automatic device selection
+DROPOUT = 0.3  # Increased from 0.2 for better regularization
+N_EPOCHS = 10  # Reduced for testing
+CHECKPOINT_FREQ = 2  # Validate every 2 epochs
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 RANDOM_SEED = 42
 SCHUDULER_ON = True
 PATIENCE = 5

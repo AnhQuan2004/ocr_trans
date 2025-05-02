@@ -79,13 +79,24 @@ class TextLoader(torch.utils.data.Dataset):
 class TextCollate():
     def __call__(self, batch):
         x_padded = []
-        y_padded = torch.LongTensor(LENGTH, len(batch))
+        
+        # Tìm độ dài lớn nhất trong batch hiện tại một cách động
+        max_y_len = max([batch[i][1].size(0) for i in range(len(batch))])
+        
+        # Không còn giới hạn cứng bởi LENGTH, chỉ giới hạn một giá trị hợp lý để tránh OOM
+        # LENGTH trong config.py trở thành một gợi ý giới hạn tối đa thay vì giá trị cứng
+        safe_max_len = min(max_y_len, 1024)  # Giới hạn an toàn để tránh OOM
+        
+        # Khởi tạo tensor kết quả với kích thước đúng
+        y_padded = torch.LongTensor(safe_max_len, len(batch))
         y_padded.zero_()
 
         for i in range(len(batch)):
             x_padded.append(batch[i][0].unsqueeze(0))
             y = batch[i][1]
-            y_padded[:y.size(0), i] = y
+            # Đảm bảo không copy quá safe_max_len
+            actual_len = min(y.size(0), safe_max_len)
+            y_padded[:actual_len, i] = y[:actual_len]
 
         x_padded = torch.cat(x_padded)
         return x_padded, y_padded

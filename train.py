@@ -16,6 +16,9 @@ from utils import generate_data, process_data
 from dataset import TextCollate, TextLoader
 from fit import fit
 
+# Giới hạn số lượng ảnh để test
+MAX_IMAGES = 5000
+
 # Verify data paths
 def verify_paths():
     if not PATH_TRAIN_DIR.exists():
@@ -53,8 +56,14 @@ try:
         raise ValueError("No valid image-label pairs found in training data")
         
     img_names, labels = list(img2label.keys()), list(img2label.values())
-    print(f"Loading {len(img_names)} training images")
     
+    # Giới hạn số lượng ảnh train
+    if len(img_names) > MAX_IMAGES:
+        print(f"Limiting training images to {MAX_IMAGES} (from {len(img_names)} total)")
+        img_names = img_names[:MAX_IMAGES]
+        labels = labels[:MAX_IMAGES]
+    
+    print(f"Loading {len(img_names)} training images")
     X_train = generate_data(img_names)
     y_train = labels
 
@@ -66,8 +75,14 @@ try:
     print(f"Loading test dataset from {PATH_TEST_DIR} ...")
     img2label, _, all_words = process_data(PATH_TEST_DIR, PATH_TEST_LABELS) 
     img_names, labels = list(img2label.keys()), list(img2label.values())
-    print(f"Loading {len(img_names)} test images")
     
+    # Giới hạn số lượng ảnh test
+    if len(img_names) > MAX_IMAGES:
+        print(f"Limiting test images to {MAX_IMAGES} (from {len(img_names)} total)")
+        img_names = img_names[:MAX_IMAGES]
+        labels = labels[:MAX_IMAGES]
+    
+    print(f"Loading {len(img_names)} test images")
     X_test = generate_data(img_names)
     y_test = labels
 
@@ -104,11 +119,13 @@ try:
     print(f'Checkpoints will be saved in {CHECKPOINTS_PATH} every {CHECKPOINT_FREQ} epochs')
     CHECKPOINTS_PATH.mkdir(parents=True, exist_ok=True)
     
-    for epoch in range(1, N_EPOCHS, CHECKPOINT_FREQ):
-        fit(model, optimizer, scheduler, criterion, train_loader, test_loader, epoch, epoch+CHECKPOINT_FREQ)
-        save_path = CHECKPOINTS_PATH / f'checkpoint_{epoch // CHECKPOINT_FREQ}.pt'
-        torch.save(model.state_dict(), save_path)
-        print(f'Saved checkpoint to {save_path}')
+    # Train for all epochs at once
+    metrics = fit(model, optimizer, scheduler, criterion, train_loader, test_loader, 0, N_EPOCHS)
+    
+    # Save final model
+    save_path = CHECKPOINTS_PATH / 'final_model.pt'
+    torch.save(model.state_dict(), save_path)
+    print(f'Saved final model to {save_path}')
         
 except Exception as e:
     print(f"Error during training: {str(e)}")

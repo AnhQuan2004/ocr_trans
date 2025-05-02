@@ -91,18 +91,45 @@ class TransformerModel(nn.Module):
         '''
         result = []
         for item in batch:
-          x = self._get_features(item.unsqueeze(0))
-          memory = self.transformer.encoder(self.pos_encoder(x))
-          out_indexes = [ALPHABET.index('SOS'), ]
-          for i in range(100):
-              trg_tensor = torch.LongTensor(out_indexes).unsqueeze(1).to(DEVICE)
-              output = self.fc_out(self.transformer.decoder(self.pos_decoder(self.decoder(trg_tensor)), memory))
+            x = self._get_features(item.unsqueeze(0))
+            memory = self.transformer.encoder(self.pos_encoder(x))
+            out_indexes = [ALPHABET.index('SOS'), ]
+            
+            # Tăng giới hạn từ 100 lên 1024 cho văn bản dài
+            max_len = 1024
+            
+            # Thêm early stopping nếu model không tạo ra thêm ký tự có ý nghĩa
+            consecutive_repeats = 0
+            prev_token = -1
+            
+            for i in range(max_len):
+                trg_tensor = torch.LongTensor(out_indexes).unsqueeze(1).to(DEVICE)
+                output = self.fc_out(self.transformer.decoder(self.pos_decoder(self.decoder(trg_tensor)), memory))
 
-              out_token = output.argmax(2)[-1].item()
-              out_indexes.append(out_token)
-              if out_token == ALPHABET.index('EOS'):
-                  break
-          result.append(out_indexes)
+                out_token = output.argmax(2)[-1].item()
+                out_indexes.append(out_token)
+                
+                # Dừng nếu gặp EOS token
+                if out_token == ALPHABET.index('EOS'):
+                    break
+                    
+                # Dừng nếu model bắt đầu lặp lại nhiều lần (tránh lặp vô hạn)
+                if out_token == prev_token:
+                    consecutive_repeats += 1
+                    if consecutive_repeats > 10:  # Dừng sau 10 lần lặp lại liên tiếp
+                        out_indexes.append(ALPHABET.index('EOS'))
+                        break
+                else:
+                    consecutive_repeats = 0
+                
+                prev_token = out_token
+                
+                # Kiểm tra độ dài đầu ra để tránh quá dài
+                if len(out_indexes) >= max_len - 1:
+                    out_indexes.append(ALPHABET.index('EOS'))
+                    break
+                    
+            result.append(out_indexes)
         return result
 
     def forward(self, src, trg):
