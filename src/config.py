@@ -19,9 +19,9 @@ ALPHABET = ['PAD', 'SOS'] + list(' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKL
             
 ### TRAINING ###
 BATCH_SIZE = 32
-DROPOUT = 0.3  # Increased from 0.2 for better regularization
-N_EPOCHS = 10  # Reduced for testing
-CHECKPOINT_FREQ = 2  # Validate every 2 epochs
+DROPOUT = 0.2
+N_EPOCHS = 50  # Increased for full dataset
+CHECKPOINT_FREQ = 5  # Validate every 5 epochs
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 RANDOM_SEED = 42
 SCHUDULER_ON = True
