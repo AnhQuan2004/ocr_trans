@@ -57,14 +57,8 @@ try:
         
     img_names, labels = list(img2label.keys()), list(img2label.values())
     
-    # Chỉ lấy 3000 mẫu đầu tiên
-    MAX_SAMPLES = 3000
-    if len(img_names) > MAX_SAMPLES:
-        print(f"Using only the first {MAX_SAMPLES} samples out of {len(img_names)} available")
-        img_names = img_names[:MAX_SAMPLES]
-        labels = labels[:MAX_SAMPLES]
-    else:
-        print(f"Using all {len(img_names)} available samples")
+    # Sử dụng toàn bộ dữ liệu huấn luyện
+    print(f"Using all {len(img_names)} available samples")
         
     print(f"Loading {len(img_names)} training images")
     X_train = generate_data(img_names)
@@ -79,14 +73,8 @@ try:
     img2label, _, all_words = process_data(PATH_TEST_DIR, PATH_TEST_LABELS) 
     img_names, labels = list(img2label.keys()), list(img2label.values())
     
-    # Chỉ lấy 500 mẫu đầu tiên cho tập kiểm thử
-    MAX_TEST_SAMPLES = 500
-    if len(img_names) > MAX_TEST_SAMPLES:
-        print(f"Using only the first {MAX_TEST_SAMPLES} test samples out of {len(img_names)} available")
-        img_names = img_names[:MAX_TEST_SAMPLES]
-        labels = labels[:MAX_TEST_SAMPLES]
-    else:
-        print(f"Using all {len(img_names)} available test samples")
+    # Sử dụng toàn bộ dữ liệu kiểm thử
+    print(f"Using all {len(img_names)} available test samples")
         
     print(f"Loading {len(img_names)} test images")
     X_test = generate_data(img_names)
