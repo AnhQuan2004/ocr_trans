@@ -41,7 +41,7 @@ def train(model, optimizer, criterion, train_loader):
 
 
 # GENERAL FUNCTION FROM TRAINING AND VALIDATION
-def fit(model, optimizer, scheduler, criterion, train_loader, val_loader, start_epoch=0, end_epoch=24):
+def fit(model, optimizer, scheduler, criterion, train_loader, val_loader, start_epoch=0, end_epoch=24, val_max_batches=5):
     metrics = []
     print("\nBắt đầu training...")
     
@@ -56,7 +56,7 @@ def fit(model, optimizer, scheduler, criterion, train_loader, val_loader, start_
         # Chỉ validate sau mỗi CHECKPOINT_FREQ epochs
         if (epoch + 1) % CHECKPOINT_FREQ == 0:
             print("\nValidating...")
-            epoch_metrics, _ = evaluate(model, criterion, val_loader)
+            epoch_metrics, _ = evaluate(model, criterion, val_loader, max_batches=val_max_batches)
             epoch_metrics['train_loss'] = train_loss
             epoch_metrics['epoch'] = epoch + 1
             epoch_metrics['time'] = end_time - start_time

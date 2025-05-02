@@ -239,7 +239,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def evaluate(model, criterion, loader, case=True, punct=True):
+def evaluate(model, criterion, loader, case=True, punct=True, max_batches=None):
     """
     Evaluate model performance
     params
@@ -251,6 +251,8 @@ def evaluate(model, criterion, loader, case=True, punct=True):
         whether to consider case sensitivity
     punct : bool
         whether to consider punctuation
+    max_batches : int or None
+        if specified, limits evaluation to this many batches
 
     returns
     ---
@@ -267,6 +269,11 @@ def evaluate(model, criterion, loader, case=True, punct=True):
         # Thêm progress bar cho validation
         val_pbar = tqdm(loader, desc='Validating', leave=False)
         for batch_idx, (src, trg) in enumerate(val_pbar):
+            # Giới hạn số lượng batch để đánh giá
+            if max_batches is not None and batch_idx >= max_batches:
+                print(f"\nReached max_batches limit ({max_batches}). Stopping validation.")
+                break
+                
             src, trg = src.to(DEVICE), trg.to(DEVICE)
             logits = model(src, trg[:-1, :])
             loss = criterion(logits.view(-1, logits.shape[-1]), torch.reshape(trg[1:, :], (-1,)))
@@ -317,12 +324,14 @@ def evaluate(model, criterion, loader, case=True, punct=True):
                 'WER': f'{batch_wer/BATCH_SIZE:.4f}'
             })
 
-    # Average metrics over all batches
+    # Average metrics over all batches that were actually processed
+    num_batches = min(len(loader), max_batches or float('inf'))
     for key in metrics.keys():
-        metrics[key] /= len(loader)
+        metrics[key] /= num_batches
         
     # Print some statistics
     print("\nEvaluation Statistics:")
+    print(f"Evaluated on {num_batches} batches ({len(result['true'])} samples)")
     print(f"Average CER: {metrics['cer']:.4f}")
     print(f"Average WER: {metrics['wer']:.4f}")
     print(f"Average Loss: {metrics['loss']:.4f}")
@@ -384,12 +393,36 @@ class ToTensor(object):
 
 
 def log_config(model):
-    print('transformer layers: {}'.format(model.enc_layers))
-    print('transformer heads: {}'.format(model.transformer.nhead))
-    print('hidden dim: {}'.format(model.decoder.embedding_dim))
-    print('num classes: {}'.format(model.decoder.num_embeddings))
+    # Kiểm tra các thuộc tính trước khi truy cập
+    if hasattr(model, 'enc_layers'):
+        print('encoder layers: {}'.format(model.enc_layers))
+    if hasattr(model, 'dec_layers'):
+        print('decoder layers: {}'.format(model.dec_layers))
+    
+    # Kiểm tra transformer hoặc transformer_decoder
+    if hasattr(model, 'transformer') and hasattr(model.transformer, 'nhead'):
+        print('transformer heads: {}'.format(model.transformer.nhead))
+    elif hasattr(model, 'transformer_decoder') and hasattr(model.transformer_decoder.layers[0], 'nhead'):
+        print('transformer heads: {}'.format(model.transformer_decoder.layers[0].nhead))
+    
+    # Kiểm tra các thuộc tính decoder
+    if hasattr(model, 'decoder') and hasattr(model.decoder, 'embedding_dim'):
+        print('hidden dim: {}'.format(model.decoder.embedding_dim))
+        print('num classes: {}'.format(model.decoder.num_embeddings))
+    elif hasattr(model, 'decoder_embedding') and hasattr(model.decoder_embedding, 'embedding_dim'):
+        print('hidden dim: {}'.format(model.decoder_embedding.embedding_dim))
+        print('num classes: {}'.format(model.decoder_embedding.num_embeddings))
+    
+    # Backbone luôn tồn tại
     print('backbone: {}'.format(model.backbone_name))
-    print('dropout: {}'.format(model.pos_encoder.dropout.p))
+    
+    # Kiểm tra positional encoder
+    if hasattr(model, 'pos_encoder') and hasattr(model.pos_encoder, 'dropout'):
+        print('dropout: {}'.format(model.pos_encoder.dropout.p))
+    elif hasattr(model, 'pos_decoder') and hasattr(model.pos_decoder, 'dropout'):
+        print('dropout: {}'.format(model.pos_decoder.dropout.p))
+    
+    # Số lượng tham số luôn được tính
     print(f'{count_parameters(model):,} trainable parameters')
 
 

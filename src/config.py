@@ -5,7 +5,7 @@ import random
 
 
 ### MODEL ### 
-MODEL = 'model1'
+MODEL = 'model3'
 HIDDEN = 256
 ENC_LAYERS = 3
 DEC_LAYERS = 3
@@ -20,7 +20,7 @@ ALPHABET = ['PAD', 'SOS'] + list(' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKL
 ### TRAINING ###
 BATCH_SIZE = 32
 DROPOUT = 0.2
-N_EPOCHS = 50  # Increased for full dataset
+N_EPOCHS = 10  # Increased for full dataset
 CHECKPOINT_FREQ = 5  # Validate every 5 epochs
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 RANDOM_SEED = 42

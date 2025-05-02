@@ -37,6 +37,9 @@ torch.cuda.manual_seed(RANDOM_SEED)
 char2idx = {char: idx for idx, char in enumerate(ALPHABET)}
 idx2char = {idx: char for idx, char in enumerate(ALPHABET)}
 
+# Print vocabulary size
+print(f"Vocabulary size: {len(ALPHABET)} characters")
+
 # Ensure directories exist
 PATH_TRAIN_DIR.mkdir(parents=True, exist_ok=True)
 PATH_TEST_DIR.mkdir(parents=True, exist_ok=True)
@@ -53,6 +56,16 @@ try:
         raise ValueError("No valid image-label pairs found in training data")
         
     img_names, labels = list(img2label.keys()), list(img2label.values())
+    
+    # Chỉ lấy 3000 mẫu đầu tiên
+    MAX_SAMPLES = 3000
+    if len(img_names) > MAX_SAMPLES:
+        print(f"Using only the first {MAX_SAMPLES} samples out of {len(img_names)} available")
+        img_names = img_names[:MAX_SAMPLES]
+        labels = labels[:MAX_SAMPLES]
+    else:
+        print(f"Using all {len(img_names)} available samples")
+        
     print(f"Loading {len(img_names)} training images")
     X_train = generate_data(img_names)
     y_train = labels
@@ -65,6 +78,16 @@ try:
     print(f"Loading test dataset from {PATH_TEST_DIR} ...")
     img2label, _, all_words = process_data(PATH_TEST_DIR, PATH_TEST_LABELS) 
     img_names, labels = list(img2label.keys()), list(img2label.values())
+    
+    # Chỉ lấy 500 mẫu đầu tiên cho tập kiểm thử
+    MAX_TEST_SAMPLES = 500
+    if len(img_names) > MAX_TEST_SAMPLES:
+        print(f"Using only the first {MAX_TEST_SAMPLES} test samples out of {len(img_names)} available")
+        img_names = img_names[:MAX_TEST_SAMPLES]
+        labels = labels[:MAX_TEST_SAMPLES]
+    else:
+        print(f"Using all {len(img_names)} available test samples")
+        
     print(f"Loading {len(img_names)} test images")
     X_test = generate_data(img_names)
     y_test = labels
@@ -81,6 +104,10 @@ try:
     elif MODEL == 'model2':
         from models import model2
         model = model2.TransformerModel(len(ALPHABET), hidden=HIDDEN, enc_layers=ENC_LAYERS, dec_layers=DEC_LAYERS,   
+                                nhead=N_HEADS, dropout=DROPOUT).to(DEVICE)
+    elif MODEL == 'model3':
+        from models import model3
+        model = model3.TransformerModel(len(ALPHABET), hidden=HIDDEN, dec_layers=DEC_LAYERS,   
                                 nhead=N_HEADS, dropout=DROPOUT).to(DEVICE)
     else:
         raise ValueError(f"Unknown model type: {MODEL}")
@@ -103,11 +130,11 @@ try:
     CHECKPOINTS_PATH.mkdir(parents=True, exist_ok=True)
     
     # Train for all epochs at once
-    metrics = fit(model, optimizer, scheduler, criterion, train_loader, test_loader, 0, N_EPOCHS)
+    metrics = fit(model, optimizer, scheduler, criterion, train_loader, test_loader, 0, N_EPOCHS, val_max_batches=2)
     
     # Save final model
     save_path = CHECKPOINTS_PATH / 'final_model.pt'
-        torch.save(model.state_dict(), save_path)
+    torch.save(model.state_dict(), save_path)
     print(f'Saved final model to {save_path}')
         
 except Exception as e:
