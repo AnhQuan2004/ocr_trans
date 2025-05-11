@@ -275,7 +275,14 @@ def evaluate(model, criterion, loader, case=True, punct=True, max_batches=None):
                 break
                 
             src, trg = src.to(DEVICE), trg.to(DEVICE)
-            logits = model(src, trg[:-1, :])
+            output = model(src, trg[:-1, :])
+            
+            # Handle tuple output (attn_logits, attention_weights)
+            if isinstance(output, tuple):
+                logits, _ = output  # Unpack and use only logits
+            else:
+                logits = output
+                
             loss = criterion(logits.view(-1, logits.shape[-1]), torch.reshape(trg[1:, :], (-1,)))
             out_indexes = model.predict(src)
             

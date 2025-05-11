@@ -5,7 +5,7 @@ import random
 
 
 ### MODEL ### 
-MODEL = 'model3'
+MODEL = 'model4'
 HIDDEN = 256
 ENC_LAYERS = 3
 DEC_LAYERS = 3
@@ -18,16 +18,22 @@ ALPHABET = ['PAD', 'SOS'] + list(' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKL
            'àáâãèéêìíòóôõùúýăđĩũơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ') + ['EOS']
             
 ### TRAINING ###
-BATCH_SIZE = 32  # Reduced from 32 to 8 to address CUDA out of memory error
-DROPOUT = 0.2
-N_EPOCHS = 10  # Increased for full dataset
-CHECKPOINT_FREQ = 5  # Validate every 5 epochs
+BATCH_SIZE = 64  # Reduced from 32 to 8 to address CUDA out of memory error
+DROPOUT = 0.5
+N_EPOCHS = 100  # Increased for full dataset
+CHECKPOINT_FREQ = 20  # Validate every 5 epochs
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 RANDOM_SEED = 42
 SCHUDULER_ON = True
 PATIENCE = 5
 OPTIMIZER_NAME = 'Adam'
-LR = 1e-4
+LR = 2e-4  # Reduced learning rate for fine-tuning with frozen layers
+
+# Early stopping configuration
+EARLY_STOPPING = True
+EARLY_STOPPING_PATIENCE = 3  # Stop training if no improvement for 3 consecutive validations
+EARLY_STOPPING_MIN_DELTA = 0.001  # Minimum change to qualify as improvement
+EARLY_STOPPING_METRIC = 'loss'  # Monitor validation loss
 
 ### TESTING ###
 CASE = True  # Consider case sensitivity

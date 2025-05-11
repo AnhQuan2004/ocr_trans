@@ -21,6 +21,7 @@ FROM_CHECKPOINT_PATH = None # if not None then training start with this checkpoi
 WEIGHTS_PATH = DIR / 'ocr_transformer_rn50_4h2l_64x256.pt'
 PATH_TEST_RESULTS = DIR / 'test_rn50_4h2l_result.tsv'
 TRAIN_LOG = DIR / 'train_log.tsv'
+EPOCH_LOG = DIR / 'epoch_log.tsv'
 
 # Print paths for debugging
 print(f"Project directory: {DIR}")

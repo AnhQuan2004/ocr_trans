@@ -1,0 +1,5 @@
+=== TRAINING STARTED AT 2025-05-12 00:57:33 ===
+Model: TransformerOCR
+Optimizer: Adam, LR: 0.0002
+Epochs: 0 to 100
+

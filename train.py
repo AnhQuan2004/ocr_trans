@@ -11,7 +11,8 @@ from config import MODEL, BATCH_SIZE, N_HEADS, \
                     DEVICE, RANDOM_SEED, HIDDEN, \
                     DROPOUT, CHECKPOINT_FREQ, N_EPOCHS, \
                     ALPHABET, TRAIN_TRANSFORMS, TEST_TRANSFORMS, \
-                    OPTIMIZER_NAME, SCHUDULER_ON, PATIENCE
+                    OPTIMIZER_NAME, SCHUDULER_ON, PATIENCE, \
+                    EARLY_STOPPING, EARLY_STOPPING_PATIENCE, EARLY_STOPPING_MIN_DELTA, EARLY_STOPPING_METRIC
 from utils import generate_data, process_data 
 from dataset import TextCollate, TextLoader
 from fit import fit
@@ -96,6 +97,10 @@ try:
     elif MODEL == 'model3':
         from models import model3
         model = model3.TransformerModel(len(ALPHABET), hidden=HIDDEN, dec_layers=DEC_LAYERS,   
+                                nhead=N_HEADS, dropout=DROPOUT).to(DEVICE)
+    elif MODEL == 'model4':
+        from models import model4
+        model = model4.TransformerOCR(len(ALPHABET), hidden=HIDDEN, dec_layers=DEC_LAYERS,   
                                 nhead=N_HEADS, dropout=DROPOUT).to(DEVICE)
     else:
         raise ValueError(f"Unknown model type: {MODEL}")
