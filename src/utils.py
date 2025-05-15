@@ -196,38 +196,35 @@ def generate_data(img_paths):
     """
     params
     ---
-    names : list of str
+    img_paths : list of Path 
         paths to images
 
     returns
     ---
-    data_images : list of np.array
-        images in np.array format
+    data_images : list of PIL.Image
+        images in PIL.Image format
     """
     data_images = []
     for path in tqdm(img_paths):
         try:
-            # Convert path to string and normalize it
             path_str = str(path)
-            
-            # Try loading with PIL first (better Unicode support)
+            pil_img = Image.open(path_str).convert('RGB')
+            data_images.append(pil_img)
+        except Exception as e_pil: 
+            print(f"Error loading image {path_str} with PIL: {str(e_pil)}")
             try:
-                with Image.open(path_str) as img:
-                    img = np.array(img.convert('RGB'))
-            except Exception as e:
-                print(f"PIL failed to load {path_str}, trying cv2: {str(e)}")
-                # If PIL fails, try cv2 with Unicode path handling
-                img = cv2.imdecode(np.fromfile(path_str, dtype=np.uint8), cv2.IMREAD_COLOR)
-                if img is not None:
-                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                print(f"Trying to load {path_str} with cv2 as fallback.")
+                cv2_img = cv2.imdecode(np.fromfile(path_str, dtype=np.uint8), cv2.IMREAD_COLOR)
+                if cv2_img is not None:
+                    cv2_img_rgb = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
+                    pil_img_fallback = Image.fromarray(cv2_img_rgb)
+                    data_images.append(pil_img_fallback)
                 else:
-                    raise ValueError(f"Failed to load image: {path_str}")
-            
-            img = process_image(img)
-            data_images.append(img.astype('uint8'))
-        except Exception as e:
-            print(f"Error processing image {path_str}: {str(e)}")
-            continue
+                    print(f"cv2 also failed to load image: {path_str}")
+                    continue 
+            except Exception as e_cv2:
+                print(f"Error loading image {path_str} with cv2 fallback: {str(e_cv2)}")
+                continue 
             
     if len(data_images) == 0:
         raise ValueError("No images could be loaded successfully. Please check your image paths and formats.")

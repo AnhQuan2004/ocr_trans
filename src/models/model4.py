@@ -145,21 +145,25 @@ class TransformerOCR(nn.Module):
         return mask.masked_fill(mask == 1, float('-inf'))
 
     def _get_features(self, src):
-        # src: [B,C,H,W] raw images or tensor
-        # If src is already a tensor in the right format, just use it directly
+        # src: expected to be a [B, C, H, W] tensor from Dataloader,
+        # or a list of PIL Images for direct prediction.
+
         if isinstance(src, torch.Tensor):
-            # Check if tensor has the right dimensions and normalize if needed
-            if src.dim() == 4:
-                # Resize if needed
-                if src.shape[2] != 224 or src.shape[3] != 224:
-                    src = torch.nn.functional.interpolate(src, size=(224, 224), mode='bilinear', align_corners=False)
-                # Assuming input is already normalized, if not, uncommenting below would normalize it
-                # src = self.normalize(src)
-            else:
-                raise ValueError(f"Input tensor should have 4 dimensions [B,C,H,W], got {src.dim()}")
+            # Assert input tensor from Dataloader is correctly preprocessed
+            if not (src.dim() == 4 and src.shape[2] == 224 and src.shape[3] == 224):
+                # This should not happen if Dataloader is configured correctly with VIT_IMAGE_SIZE
+                # However, if it does, we might need to resize.
+                # For now, let's raise an error or log a warning,
+                # as this indicates a mismatch between Dataloader and model expectations.
+                print(f"Warning: Input tensor to _get_features has unexpected shape: {src.shape}. Expected [B, C, 224, 224]. Attempting to resize.")
+                src = torch.nn.functional.interpolate(src, size=(224, 224), mode='bilinear', align_corners=False)
+            # Normalization is assumed to be done by the Dataloader's transforms
+        elif isinstance(src, list) and all(isinstance(item, Image.Image) for item in src):
+            # Handle list of PIL images (e.g., for direct prediction)
+            # Use the model's internal transform
+            src = torch.stack([self.transform(img) for img in src]).to(self.vit.conv_proj.weight.device) # Ensure tensor is on correct device
         else:
-            # For non-tensor inputs (PIL images, numpy arrays, etc.)
-            src = torch.stack([self.transform(img) for img in src])
+            raise ValueError(f"Input 'src' to _get_features must be a 4D Tensor or a list of PIL Images. Got {type(src)}")
 
         # Forward through ViT
         batch_size = src.shape[0]
@@ -217,10 +221,35 @@ class TransformerOCR(nn.Module):
         trg_flat = trg.view(-1)
         ce_loss = nn.functional.cross_entropy(attn_flat, trg_flat, ignore_index=ALPHABET.index('PAD'))
         if self.use_ctc and self.ctc_logits is not None:
-            # CTC expects [S, B, V]
-            log_probs = self.ctc_logits.log_softmax(2)
-            ctc_loss = self.ctc_loss(log_probs, trg, src_lengths, trg_lengths)
-            return alpha * ce_loss + (1 - alpha) * ctc_loss
+            log_probs = self.ctc_logits.log_softmax(2)  # Shape [S, B, V] (input_len, batch, num_classes)
+            
+            # Prepare targets for CTC: shape (batch_size, max_trg_len_for_ctc)
+            # trg is the padded target tensor from dataloader, shape (max_len_with_sos_eos, batch_size)
+            # trg_lengths are the lengths of the original text (N chars), shape (batch_size,)
+            
+            batch_size = trg.size(1)
+            max_trg_len_for_ctc = trg_lengths.max().item()
+            pad_token_id = ALPHABET.index('PAD')
+
+            ctc_targets = torch.full(
+                (batch_size, max_trg_len_for_ctc),
+                fill_value=pad_token_id,
+                dtype=torch.long,
+                device=trg.device
+            )
+
+            for i in range(batch_size):
+                # Extract original characters: trg[1 (skip SOS) : 1 + N_chars, i]
+                actual_len = trg_lengths[i].item()
+                if actual_len > 0: # Ensure there's something to copy
+                    ctc_targets[i, :actual_len] = trg[1 : 1 + actual_len, i]
+            
+            # src_lengths are input_lengths for CTCLoss, shape (batch_size)
+            # trg_lengths are target_lengths for CTCLoss, shape (batch_size)
+            # self.ctc_loss is nn.CTCLoss(blank=pad_token_id, zero_infinity=True)
+            # It expects targets (N, S_target_max) and target_lengths (N)
+            ctc_loss_val = self.ctc_loss(log_probs, ctc_targets, src_lengths, trg_lengths)
+            return alpha * ce_loss + (1 - alpha) * ctc_loss_val
         else:
             return ce_loss
 

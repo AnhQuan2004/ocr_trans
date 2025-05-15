@@ -63,13 +63,12 @@ class TextLoader(torch.utils.data.Dataset):
                 N, max_len, list(counter.items())[-1], list(counter.items())[0]))
 
     def __getitem__(self, index):
-        img = self.images_name[index]
-        img = self.transform(img)
-        img = img / img.max()
-        img = img ** (random.random() * 0.7 + 0.6)
+        img = self.images_name[index] # img is a PIL.Image
+        img_tensor = self.transform(img) # self.transform is TRAIN_TRANSFORMS or TEST_TRANSFORMS
 
         label = text_to_labels(self.labels[index], self.char2idx)
-        return (torch.FloatTensor(img), torch.LongTensor(label))
+        # img_tensor is already a FloatTensor due to transforms.ToTensor()
+        return (img_tensor, torch.LongTensor(label))
 
     def __len__(self):
         return len(self.labels)
@@ -89,14 +88,33 @@ class TextCollate():
         
         # Khởi tạo tensor kết quả với kích thước đúng
         y_padded = torch.LongTensor(safe_max_len, len(batch))
-        y_padded.zero_()
+        # Fill with PAD index, ALPHABET must be imported or accessible
+        # Assuming ALPHABET is imported from config and available in this scope
+        from config import ALPHABET # Ensure ALPHABET is in scope
+        pad_token_idx = ALPHABET.index('PAD')
+        y_padded.fill_(pad_token_idx)
+
+        actual_target_lengths = []
 
         for i in range(len(batch)):
             x_padded.append(batch[i][0].unsqueeze(0))
-            y = batch[i][1]
-            # Đảm bảo không copy quá safe_max_len
-            actual_len = min(y.size(0), safe_max_len)
-            y_padded[:actual_len, i] = y[:actual_len]
+            y = batch[i][1] # This is the output of text_to_labels: [SOS, char1, ..., charN, EOS]
+            
+            # Actual length for CTC is number of chars (N), so len(y) - 2
+            # However, nn.CTCLoss target_lengths should be for the targets passed to it.
+            # If targets for CTC are y[1:-1], then length is y.size(0) - 2.
+            # If targets for CTC are y (including SOS/EOS), then length is y.size(0).
+            # Let's assume for now CTCLoss in model.compute_loss will handle SOS/EOS if needed,
+            # and target_lengths should be the length of the sequence given to CTCLoss.
+            # For CE loss, the full y_padded (with SOS/EOS) is used.
+            # For CTC, typically the original characters without SOS/EOS are used.
+            # Let's return the length of the original text (number of characters).
+            original_text_len = y.size(0) - 2 
+            actual_target_lengths.append(original_text_len if original_text_len > 0 else 1) # CTC needs positive lengths
+
+            current_padded_len = min(y.size(0), safe_max_len)
+            y_padded[:current_padded_len, i] = y[:current_padded_len]
 
         x_padded = torch.cat(x_padded)
-        return x_padded, y_padded
+        y_lengths_tensor = torch.IntTensor(actual_target_lengths)
+        return x_padded, y_padded, y_lengths_tensor

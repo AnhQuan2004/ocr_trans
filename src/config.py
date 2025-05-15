@@ -18,7 +18,7 @@ ALPHABET = ['PAD', 'SOS'] + list(' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKL
            'àáâãèéêìíòóôõùúýăđĩũơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ') + ['EOS']
             
 ### TRAINING ###
-BATCH_SIZE = 64  # Reduced from 32 to 8 to address CUDA out of memory error
+BATCH_SIZE = 8  # Reduced from 32 to 8 to address CUDA out of memory error (set to 8 based on comment)
 DROPOUT = 0.5
 N_EPOCHS = 100  # Increased for full dataset
 CHECKPOINT_FREQ = 20  # Validate every 5 epochs
@@ -49,8 +49,12 @@ p = Augmentor.Pipeline()
 p.shear(max_shear_left=2, max_shear_right=2, probability=0.7)
 p.random_distortion(probability=1.0, grid_width=3, grid_height=3, magnitude=11)
 
+VIT_IMAGE_SIZE = 224
+VIT_MEAN = [0.485, 0.456, 0.406]
+VIT_STD = [0.229, 0.224, 0.225]
+
 TRAIN_TRANSFORMS = transforms.Compose([
-    transforms.ToPILImage(),
+    transforms.Resize((VIT_IMAGE_SIZE, VIT_IMAGE_SIZE)),
     transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),  # Adjusted for better handling of Vietnamese text
     transforms.RandomRotation(degrees=(-5, 5)),  # Reduced rotation to preserve character integrity
     transforms.RandomAffine(
@@ -58,12 +62,14 @@ TRAIN_TRANSFORMS = transforms.Compose([
         translate=(0.05, 0.05),
         scale=(0.9, 1.1),
         shear=5,
-        fill=255
+        fill=255 # Consider using mean color for fill if appropriate
     ),
     transforms.ToTensor(),
+    transforms.Normalize(mean=VIT_MEAN, std=VIT_STD)
 ])
 
 TEST_TRANSFORMS = transforms.Compose([
-    transforms.ToPILImage(),
+    transforms.Resize((VIT_IMAGE_SIZE, VIT_IMAGE_SIZE)),
     transforms.ToTensor(),
+    transforms.Normalize(mean=VIT_MEAN, std=VIT_STD)
 ])

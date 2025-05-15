@@ -112,19 +112,38 @@ def train(model, optimizer, criterion, train_loader):
     epoch_loss = 0
     # Thêm progress bar cho training loop
     pbar = tqdm(train_loader, desc='Training', leave=False)
-    for src, trg in pbar:
-        src, trg = src.to(DEVICE), trg.to(DEVICE)
-        optimizer.zero_grad()
-        output = model(src, trg[:-1, :])
+    # DataLoader now yields (src, trg_padded, trg_lengths_for_ctc)
+    for src, trg_padded, trg_lengths_for_ctc in pbar:
+        src = src.to(DEVICE)
+        trg_padded = trg_padded.to(DEVICE)
+        trg_lengths_for_ctc = trg_lengths_for_ctc.to(DEVICE)
         
-        # Handle tuple output (attn_logits, attention_weights)
-        if isinstance(output, tuple):
-            attn_logits, attention_weights = output
-            # Use just the attn_logits for loss calculation
-            loss = criterion(attn_logits.view(-1, attn_logits.shape[-1]), torch.reshape(trg[1:, :], (-1,)))
+        optimizer.zero_grad()
+        
+        # model.forward expects src and decoder_input (trg_padded[:-1, :])
+        # output_tuple should be (attn_logits, attention_weights)
+        output_tuple = model(src, trg_padded[:-1, :]) 
+        
+        if hasattr(model, 'compute_loss') and getattr(model, 'use_ctc', False) and model.ctc_logits is not None:
+            # Calculate src_lengths for CTC: sequence length from encoder output
+            # model.ctc_logits has shape [S, B, V] where S is src_len
+            src_lengths_for_ctc = torch.full(
+                size=(src.size(0),),  # Batch size
+                fill_value=model.ctc_logits.size(0), # S (sequence length from encoder)
+                device=DEVICE,
+                dtype=torch.long
+            )
+            # model.compute_loss expects: output_tuple, trg_padded (for CE loss part), 
+            # trg_lengths_for_ctc (for CTC part), src_lengths_for_ctc (for CTC part)
+            loss = model.compute_loss(output_tuple, trg_padded, trg_lengths_for_ctc, src_lengths_for_ctc)
         else:
-            # For backward compatibility
-            loss = criterion(output.view(-1, output.shape[-1]), torch.reshape(trg[1:, :], (-1,)))
+            # Fallback to original CE loss if not using CTC or compute_loss is not available
+            if isinstance(output_tuple, tuple):
+                attn_logits, _ = output_tuple
+            else: # Should not happen if model4 always returns tuple
+                attn_logits = output_tuple
+            # CE loss target is trg_padded[1:, :] (shifted target, excluding SOS)
+            loss = criterion(attn_logits.view(-1, attn_logits.shape[-1]), torch.reshape(trg_padded[1:, :], (-1,)))
             
         loss.backward()
         optimizer.step()
@@ -244,4 +263,3 @@ def fit(model, optimizer, scheduler, criterion, train_loader, val_loader, start_
             f.write(f"Best {EARLY_STOPPING_METRIC}: {best_metric:.4f}\n")
             
     return metrics
-
