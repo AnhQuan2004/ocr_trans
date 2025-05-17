@@ -18,10 +18,10 @@ ALPHABET = ['PAD', 'SOS'] + list(' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKL
            'àáâãèéêìíòóôõùúýăđĩũơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ') + ['EOS']
             
 ### TRAINING ###
-BATCH_SIZE = 32  # Reduced from 32 to 8 to address CUDA out of memory error
+BATCH_SIZE = 64  # Reduced from 32 to 8 to address CUDA out of memory error
 DROPOUT = 0.2
-N_EPOCHS = 10  # Increased for full dataset
-CHECKPOINT_FREQ = 5  # Validate every 5 epochs
+N_EPOCHS = 100  # Increased for full dataset
+CHECKPOINT_FREQ = 10  # Validate every 5 epochs
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 RANDOM_SEED = 42
 SCHUDULER_ON = True
